@@ -90,9 +90,15 @@ function CodeInstance(result::InferenceResult, min_valid::UInt, max_valid::UInt,
     else
         if isa(result.result, Const)
             rettype_const = (result.result::Const).val
+            # This is illegal, because Vector{Any} is mutable.
+            # We use it to indicate a PartialStruct instead (see below)
+            @assert !isa(rettype_const, Vector{Any})
             const_flags = 0x2
         elseif isconstType(result.result)
             rettype_const = result.result.parameters[1]
+            const_flags = 0x2
+        elseif isa(result.result, PartialStruct)
+            rettype_const = (result.result::PartialStruct).fields
             const_flags = 0x2
         else
             rettype_const = nothing
@@ -493,7 +499,11 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     if code isa CodeInstance # return existing rettype if the code is already inferred
         update_valid_age!(min_world(code), max_world(code), caller)
         if isdefined(code, :rettype_const)
-            return Const(code.rettype_const), mi
+            if isa(code.rettype_const, Vector{Any})
+                return PartialStruct(code.rettype, code.rettype_const), mi
+            else
+                return Const(code.rettype_const), mi
+            end
         else
             return code.rettype, mi
         end
@@ -532,7 +542,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
 end
 
 function widenconst_bestguess(bestguess)
-    !isa(bestguess, Const) && !isa(bestguess, Type) && return widenconst(bestguess)
+    !isa(bestguess, Const) && !isa(bestguess, PartialStruct) && !isa(bestguess, Type) && return widenconst(bestguess)
     return bestguess
 end
 
