@@ -2660,3 +2660,8 @@ function symcmp36230(vec)
     return false
 end
 @test Base.return_types(symcmp36230, (Vector{Any},)) == Any[Bool]
+
+# Issue #36531, double varargs in abstract_iteration
+splat36531(args...) = args
+f36531(args...) = Core._apply_iterate(Base.iterate, splat36531, args...)
+@test @inferred(f36531(1,2,3)) == (1,2,3)
